@@ -20,6 +20,7 @@
     "@mui/styled-engine": "^5.15.7",
     "@mui/x-tree-view": "^6.17.0",
     "@oce-editor-tools/mui-core": "^0.1.30",
+    "@vitejs/plugin-react": "^4.2.1",
     "epitelete-html": "^0.2.20-beta.8",
     "prop-types": "^15.8.1",
     "proskomma-core": "^0.10.4",
