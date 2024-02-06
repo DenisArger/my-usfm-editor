@@ -2,31 +2,19 @@ import { useEffect, useState } from "react";
 import { Proskomma } from "proskomma-core";
 import axios from "axios";
 
-const URL =
-  "https://git.door43.org/ru_gl/ru_rlob/raw/078d6c572bacf26d628b6bc563950f4167535af3/65-3JN.usfm";
-
-const fetchData = (url) => {
-  return axios
-    .get(url)
-    .then((response) => response.data)
-    .catch((error) => {
-      console.error("Error fetching data:", error);
-      throw error;
-    });
-};
-
-function ChapterView() {
+function ChapterView({ url, chapterNumber }) {
   const [versesData, setVersesData] = useState([]);
 
   useEffect(() => {
-    const parseData = async () => {
+    const fetchData = async () => {
       try {
         const pk = new Proskomma();
-        const data = await fetchData(URL);
+        const data = await axios.get(url).then((response) => response.data);
         pk.importDocument({ abbr: "rlob", lang: "rus" }, "usfm", data);
+
         const res = await pk.gqlQuerySync(`{
           documents {
-              cvIndex(chapter:1) {
+              cvIndex(chapter:${chapterNumber}) {
                  verses {
                     verse {
                        verseRange
@@ -45,15 +33,14 @@ function ChapterView() {
         );
 
         setVersesData(versesArray);
-
         console.log(versesArray);
       } catch (error) {
         console.error("An error occurred:", error);
       }
     };
 
-    parseData();
-  }, []);
+    fetchData();
+  }, [url, chapterNumber]);
 
   return (
     <div>
