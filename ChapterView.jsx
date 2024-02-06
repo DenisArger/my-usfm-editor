@@ -6,6 +6,7 @@ function ChapterView({ url, chapterNumber }) {
   const [versesData, setVersesData] = useState([]);
   const [pk, setPk] = useState(new Proskomma());
   const [chapterCache, setChapterCache] = useState({});
+  const [header, setHeader] = useState();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,7 +43,7 @@ function ChapterView({ url, chapterNumber }) {
             }
           }`);
 
-          const versesArray = res.data.documents[0].cvIndex.verses.map(
+          const versesArray = res?.data.documents[0]?.cvIndex.verses.map(
             (verse) => ({
               verseRange: verse.verse[0]?.verseRange || "",
               text: verse.verse[0]?.text || "",
@@ -56,7 +57,7 @@ function ChapterView({ url, chapterNumber }) {
           });
 
           setVersesData(versesArray);
-          console.log(versesArray);
+          // console.log(versesArray);
         }
       } catch (error) {
         console.error("An error occurred while fetching verses:", error);
@@ -66,9 +67,57 @@ function ChapterView({ url, chapterNumber }) {
     fetchVerses();
   }, [pk, chapterNumber, chapterCache]);
 
+  useEffect(() => {
+    const fetchDocSetId = async () => {
+      try {
+        if (chapterCache[chapterNumber]) {
+          // Если глава уже есть в кеше, используем ее данные
+          setVersesData(chapterCache[chapterNumber]);
+        } else {
+          const docSetId = await pk.gqlQuerySync(`{
+            documents {
+              docSetId
+            }
+          }`);
+
+          // console.log(docSetId, 82);
+        }
+      } catch (error) {
+        console.error("An error occurred while fetching verses:", error);
+      }
+    };
+
+    fetchDocSetId();
+  }, [pk]);
+
+  useEffect(() => {
+    const fetchHeaders = async () => {
+      try {
+        if (chapterCache[chapterNumber]) {
+          // Если глава уже есть в кеше, используем ее данные
+          setVersesData(chapterCache[chapterNumber]);
+        } else {
+          const headers = await pk.gqlQuerySync(`{
+            documents {
+              header: header(id:"h"),
+              toc: header(id:"toc"),
+            }
+          }`);
+
+          setHeader(headers?.data?.documents[0]?.toc);
+        }
+      } catch (error) {
+        console.error("An error occurred while fetching verses:", error);
+      }
+    };
+
+    fetchHeaders();
+  }, [pk]);
+
   return (
     <div>
-      {versesData.map((verse, index) => (
+      <h1>{header}</h1>
+      {versesData?.map((verse, index) => (
         <div key={index}>
           <strong>{verse.verseRange}</strong> {verse.text}
         </div>
