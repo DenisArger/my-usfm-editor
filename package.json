@@ -22,8 +22,10 @@
     "@oce-editor-tools/mui-core": "^0.1.30",
     "@vitejs/plugin-react": "^4.2.1",
     "epitelete-html": "^0.2.20-beta.8",
+    "file-saver": "^2.0.5",
     "prop-types": "^15.8.1",
     "proskomma-core": "^0.10.4",
+    "proskomma-json-tools": "^0.8.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.0.1"
