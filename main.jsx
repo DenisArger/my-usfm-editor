@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import ChapterView from "./ChapterView";
+import ChapterSofriaView from "./ChapterSofriaView";
+import "./styles.css";
 
 const App = () => {
-  const [chapterNumber, setChapterNumber] = useState(1);
+  const [chapterNumber, setChapterNumber] = useState(2);
 
   const handleNextChapter = () => {
     setChapterNumber((prevChapterNumber) => prevChapterNumber + 1);
@@ -25,7 +27,8 @@ const App = () => {
         <span> Chapter {chapterNumber} </span>
         <button onClick={handleNextChapter}>Next Chapter</button>
       </div>
-      <ChapterView url={url} chapterNumber={chapterNumber} />
+      {/* <ChapterView url={url} chapterNumber={chapterNumber} /> */}
+      <ChapterSofriaView url={url} chapterNumber={chapterNumber} />
     </React.StrictMode>
   );
 };
