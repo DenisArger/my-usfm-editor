@@ -1,18 +1,18 @@
-import React from "react";
-import PropTypes from "prop-types";
-import useUsfmPreviewRenderer from "./hooks/useUsfmPreviewRenderer";
+import React from 'react'
+import PropTypes from 'prop-types'
+import useUsfmPreviewRenderer from '../../hooks/useUsfmPreviewRenderer'
 
 export default function BookPreview(props) {
-  const { usfmText, verbose, extInfo, renderFlags } = props;
+  const { usfmText, verbose, extInfo, renderFlags } = props
 
   const { renderedData, ready } = useUsfmPreviewRenderer({
     usfmText,
     verbose,
     extInfo,
     renderFlags,
-  });
+  })
 
-  return <div>{ready && renderedData ? <>{renderedData}</> : `LOADING`}</div>;
+  return <div>{ready && renderedData ? <>{renderedData}</> : `LOADING`}</div>
 }
 
 BookPreview.propTypes = {
@@ -24,8 +24,8 @@ BookPreview.propTypes = {
   extInfo: PropTypes.any,
   /** Whether to show extra info in the js console */
   verbose: PropTypes.bool,
-};
+}
 
 BookPreview.defaultProps = {
   verbose: false,
-};
+}
