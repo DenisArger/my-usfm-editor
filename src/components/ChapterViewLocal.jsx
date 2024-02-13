@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Proskomma } from 'proskomma-core'
-import axios from 'axios'
-import { SofriaRenderFromProskomma, render } from 'proskomma-json-tools'
-import { identityActions } from 'proskomma-json-tools'
 
-function ChapterView({ url, chapterNumber }) {
+function ChapterViewLocal({ pathName, chapterNumber }) {
   const [versesData, setVersesData] = useState([])
   const [pk, setPk] = useState(new Proskomma())
   const [chapterCache, setChapterCache] = useState({})
@@ -14,7 +11,11 @@ function ChapterView({ url, chapterNumber }) {
     const fetchData = async () => {
       try {
         const newPk = new Proskomma()
-        const data = await axios.get(url).then((response) => response.data)
+
+        const response = await fetch(pathName) // асинхронно получаем файл по пути
+        const data = await response.text() // получаем текст из ответа
+
+        // console.log(data)
         newPk.importDocument({ abbr: 'rlob', lang: 'rus' }, 'usfm', data)
         setPk(newPk)
       } catch (error) {
@@ -23,7 +24,7 @@ function ChapterView({ url, chapterNumber }) {
     }
 
     fetchData()
-  }, [url])
+  }, [pathName])
 
   useEffect(() => {
     const fetchVerses = async () => {
@@ -44,21 +45,21 @@ function ChapterView({ url, chapterNumber }) {
               }
             }
           }`)
-
           console.log(res, 48)
-          const versesArray = res?.data.documents[0]?.cvIndex.verses.map((verse) => ({
-            verseRange: verse.verse[0]?.verseRange || '',
-            text: verse.verse[0]?.text || '',
-          }))
+          if (res?.data?.documents[0]?.cvIndex) {
+            const versesArray = res.data.documents[0].cvIndex.verses.map((verse) => ({
+              verseRange: verse.verse[0]?.verseRange || '',
+              text: verse.verse[0]?.text || '',
+            }))
 
-          // Кешируем данные главы
-          setChapterCache({
-            ...chapterCache,
-            [chapterNumber]: versesArray,
-          })
+            // Кешируем данные главы
+            setChapterCache({
+              ...chapterCache,
+              [chapterNumber]: versesArray,
+            })
 
-          setVersesData(versesArray)
-          // console.log(versesArray);
+            setVersesData(versesArray)
+          }
         }
       } catch (error) {
         console.error('An error occurred while fetching verses:', error)
@@ -73,7 +74,7 @@ function ChapterView({ url, chapterNumber }) {
       try {
         if (chapterCache[chapterNumber]) {
           // Если глава уже есть в кеше, используем ее данные
-          setVersesData(chapterCache[chapterNumber])
+          setHeader(chapterCache[chapterNumber])
         } else {
           const headers = await pk.gqlQuerySync(`{
             documents {
@@ -82,19 +83,21 @@ function ChapterView({ url, chapterNumber }) {
             }
           }`)
 
-          setHeader(headers?.data?.documents[0]?.toc)
+          if (headers?.data?.documents[0]) {
+            setHeader(headers.data.documents[0].toc)
+          }
         }
       } catch (error) {
-        console.error('An error occurred while fetching verses:', error)
+        console.error('An error occurred while fetching headers:', error)
       }
     }
 
     fetchHeaders()
-  }, [pk])
+  }, [pk, chapterNumber, chapterCache])
 
   return (
     <div>
-      <h1>{header}</h1>
+      <h1>{header && header.title}</h1>
       {versesData?.map((verse, index) => (
         <div key={index}>
           <strong>{verse.verseRange}</strong> {verse.text}
@@ -104,4 +107,4 @@ function ChapterView({ url, chapterNumber }) {
   )
 }
 
-export default ChapterView
+export default ChapterViewLocal

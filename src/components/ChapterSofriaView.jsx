@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Proskomma } from 'proskomma-core'
 import axios from 'axios'
 import { SofriaRenderFromProskomma, render } from 'proskomma-json-tools'
+import cheerio from 'cheerio'
 
 function ChapterSofriaView({ url, chapterNumber }) {
   const [versesData, setVersesData] = useState([])
@@ -23,7 +24,26 @@ function ChapterSofriaView({ url, chapterNumber }) {
     fetchData()
   }, [url])
 
+  const parseUsfmText = (usfmText) => {
+    const $ = cheerio.load(usfmText)
+    const verses = []
+
+    // Ищем все элементы с классом "paras_usfm_p"
+    $('.paras_usfm_p').each((index, element) => {
+      const verseNumber = $(element).find('.marks_verses_label').text().trim()
+      const verseText = $(element).text().replace(/\s+/g, ' ').trim() // Заменяем множественные пробелы на один
+
+      verses.push({
+        number: verseNumber,
+        text: verseText,
+      })
+    })
+
+    return verses
+  }
+
   useEffect(() => {
+    const output = {}
     const config = {
       showWordAtts: false,
       showTitles: true,
@@ -37,6 +57,9 @@ function ChapterSofriaView({ url, chapterNumber }) {
       showVersesLabels: true,
       selectedBcvNotes: [],
       chapters: [`${chapterNumber}`],
+      bcvNotesCallback: (bcv) => {
+        setBcvNoteRef(bcv)
+      },
       renderers: render.sofria2web.sofria2html.renderers,
     }
 
@@ -48,10 +71,14 @@ function ChapterSofriaView({ url, chapterNumber }) {
           proskomma: pk,
           actions,
         })
-        const output = {}
+        // const output = {}
         cl.renderDocument({ docId, config, output })
         console.log(output)
         setVersesData(output)
+        const parsedVerses = parseUsfmText(output.paras)
+        parsedVerses.forEach((verse) => {
+          console.log(`${verse.text}`)
+        })
       } catch (err) {
         console.log(err)
       }
@@ -61,7 +88,6 @@ function ChapterSofriaView({ url, chapterNumber }) {
   }, [pk, chapterNumber])
   return (
     <div>
-      <div className="paras_default">ТЕСТ</div>
       <div className="mx-4" dangerouslySetInnerHTML={{ __html: versesData.paras }} />
     </div>
   )
