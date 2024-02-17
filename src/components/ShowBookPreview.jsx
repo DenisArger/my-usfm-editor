@@ -1,6 +1,6 @@
 import React from 'react'
 // import { usfmText } from "./data/Acts.1.usfm";
-import { usfmText } from '../../data/1pe.en.ult.usfm'
+import { usfmText } from '../../data/temp/1pe.en.ult.usfm'
 
 import BookPreview from './BookPreview' // Adjust the path accordingly
 

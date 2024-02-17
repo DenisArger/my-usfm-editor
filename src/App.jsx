@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import ChapterView from './components/ChapterView'
 import ChapterViewLocal from './components/ChapterViewLocal'
-import { versefication } from '../helpers/versification'
+import { versification } from '../helpers/versification'
 
 function App() {
   const [chapterNumber, setChapterNumber] = useState(2)
@@ -29,9 +29,9 @@ function App() {
     'https://git.door43.org/ru_gl/ru_rsob/raw/5aafe5f1e534b6b3d6f1cba3eaedc83cb54c425b/01-GEN.usfm'
 
   useEffect(() => {
-    const performVersefication = async () => {
-      // Вызываем versefication и дожидаемся выполнения
-      const mappedCvsTestFunction = await versefication()
+    const performVersification = async () => {
+      // Вызываем versification и дожидаемся выполнения
+      const mappedCvsTestFunction = await versification()
 
       // Вызываем mappedCvsTestFunction
       try {
@@ -41,7 +41,7 @@ function App() {
       }
     }
 
-    performVersefication()
+    performVersification()
   }, []) // [] чтобы выполнить useEffect только после монтирования компонента
 
   return (

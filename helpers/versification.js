@@ -1,13 +1,13 @@
 import deepCopy from 'deep-copy-all'
 import { pkWithDocs } from './load'
 
-export const versefication = async () => {
+export const versification = async () => {
   const cleanPk2 = await pkWithDocs([
     [
-      '../data/web_psa.usx',
+      '../data/19-PSA_asv.usx',
       {
         lang: 'eng',
-        abbr: 'webbe',
+        abbr: 'asv',
       },
     ],
     [
@@ -21,8 +21,8 @@ export const versefication = async () => {
 
   const addPk2Vrs = async () => {
     try {
-      let vrs = await fetch('../data/webbe.vrs').then((response) => response.text())
-      let mutationQuery = `mutation { setVerseMapping(docSetId: "eng_webbe" vrsSource: """${vrs}""")}`
+      let vrs = await fetch('../data/eng.vrs').then((response) => response.text())
+      let mutationQuery = `mutation { setVerseMapping(docSetId: "eng_asv" vrsSource: """${vrs}""")}`
       await cleanPk2.gqlQuery(mutationQuery)
 
       vrs = await fetch('../data/rsc.vrs').then((response) => response.text())
@@ -56,7 +56,7 @@ export const versefication = async () => {
       //     }
       //   }`
 
-      let docSetQuery = `{ docSet(id: "eng_webbe"){
+      let docSetQuery = `{ docSet(id: "eng_asv"){
            documents {
             mappedCvs(chapter: "${chapterNumber}", mappedDocSetId: "rus_rsb"){ 
               scopeLabels
