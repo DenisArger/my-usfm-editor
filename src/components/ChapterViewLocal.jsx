@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Proskomma } from 'proskomma-core'
+import { pkWithDocs } from '../../helpers/load'
 
 function ChapterViewLocal({ pathName, chapterNumber }) {
   const [versesData, setVersesData] = useState([])
@@ -10,12 +11,8 @@ function ChapterViewLocal({ pathName, chapterNumber }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const newPk = new Proskomma()
-
-        const response = await fetch(pathName) // асинхронно получаем файл по пути
-        const data = await response.text() // получаем текст из ответа
-
-        newPk.importDocument({ abbr: 'rlob', lang: 'rus' }, 'usfm', data)
+        const contentSpecs = [[pathName, { abbr: 'rlob', lang: 'rus' }]]
+        const newPk = await pkWithDocs(contentSpecs)
         setPk(newPk)
       } catch (error) {
         console.error('An error occurred while importing document:', error)
@@ -32,7 +29,7 @@ function ChapterViewLocal({ pathName, chapterNumber }) {
           // Если глава уже есть в кеше, используем ее данные
           setVersesData(chapterCache[chapterNumber])
         } else {
-          const res = await pk.gqlQuerySync(`{
+          let query = `{
             documents {
               cvIndex(chapter:${chapterNumber}) {
                 verses {
@@ -43,7 +40,9 @@ function ChapterViewLocal({ pathName, chapterNumber }) {
                 }
               }
             }
-          }`)
+          }`
+
+          const res = await pk.gqlQuerySync(query)
           console.log(res, 48)
           if (res?.data?.documents[0]?.cvIndex) {
             const versesArray = res.data.documents[0].cvIndex.verses.map((verse) => ({
