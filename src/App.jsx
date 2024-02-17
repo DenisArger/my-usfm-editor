@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ChapterView from './components/ChapterView'
 import ChapterViewLocal from './components/ChapterViewLocal'
+import { versefication } from '../helpers/versification'
 
 function App() {
   const [chapterNumber, setChapterNumber] = useState(2)
@@ -15,7 +16,8 @@ function App() {
     }
   }
 
-  const pathName = '../data/01-GEN.usfm'
+  // const pathName = '../data/01-GEN.usfm'
+  const pathName = '../data/web_psa.usx'
 
   const url0 =
     'https://git.door43.org/STR/ru_rsb/raw/bfb6f3be9e4c9d69c2300b8ceb2e8aaca714111c/01-GEN.usfm'
@@ -25,6 +27,22 @@ function App() {
 
   const url2 =
     'https://git.door43.org/ru_gl/ru_rsob/raw/5aafe5f1e534b6b3d6f1cba3eaedc83cb54c425b/01-GEN.usfm'
+
+  useEffect(() => {
+    const performVersefication = async () => {
+      // Вызываем versefication и дожидаемся выполнения
+      const mappedCvsTestFunction = await versefication()
+
+      // Вызываем mappedCvsTestFunction
+      try {
+        await mappedCvsTestFunction()
+      } catch (err) {
+        console.log(err)
+      }
+    }
+
+    performVersefication()
+  }, []) // [] чтобы выполнить useEffect только после монтирования компонента
 
   return (
     <div className="m-5">

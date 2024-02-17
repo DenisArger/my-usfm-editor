@@ -15,7 +15,6 @@ function ChapterViewLocal({ pathName, chapterNumber }) {
         const response = await fetch(pathName) // асинхронно получаем файл по пути
         const data = await response.text() // получаем текст из ответа
 
-        // console.log(data)
         newPk.importDocument({ abbr: 'rlob', lang: 'rus' }, 'usfm', data)
         setPk(newPk)
       } catch (error) {
