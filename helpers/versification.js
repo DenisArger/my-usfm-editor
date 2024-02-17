@@ -56,15 +56,29 @@ export const versification = async () => {
       //     }
       //   }`
 
-      let docSetQuery = `{ docSet(id: "eng_asv"){
-           documents {
-            mappedCvs(chapter: "${chapterNumber}", mappedDocSetId: "rus_rsb"){ 
-              scopeLabels
+      // let docSetQuery = `{ docSet(id: "eng_asv"){
+      //      documents {
+      //       mappedCvs(chapter: "${chapterNumber}", mappedDocSetId: "rus_rsb"){
+      //         scopeLabels
+      //         text
+      //       }
+      //     }
+      //   }
+      // }`
+
+      let docSetQuery = `{ docSet(id: "eng_asv") {
+         documents {
+          asv: cv(chapter: "23" verses: ["1"]) {
+             text 
+            } 
+          rsb: mappedCv(chapter: "23" verses: ["1"],
+            mappedDocSetId: "rus_rsb") { 
               text 
             }
+           }
+           
           }
-        }
-      }`
+         }`
 
       // let query = `{docSet(id: "eng_webbe") {
       //     documents {
@@ -82,8 +96,8 @@ export const versification = async () => {
       let result = await pk.gqlQuery(docSetQuery)
       console.log(result, 51)
 
-      const mappedCVs = result.data.docSet.documents[0].mappedCvs[0][0]
-      console.log(mappedCVs, 54)
+      // const mappedCVs = result.data.docSet.documents[0].mappedCvs[0][0]
+      // console.log(mappedCVs, 54)
     } catch (err) {
       console.log(err, 81)
     }
