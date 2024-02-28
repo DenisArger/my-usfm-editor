@@ -73,7 +73,7 @@ function ChapterSofriaView({ url, chapterNumber }) {
         })
         // const output = {}
         cl.renderDocument({ docId, config, output })
-        console.log(output)
+        // console.log(output)
         setVersesData(output)
         const parsedVerses = parseUsfmText(output.paras)
         parsedVerses.forEach((verse) => {

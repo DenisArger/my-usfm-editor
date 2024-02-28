@@ -43,7 +43,7 @@ function ChapterViewLocal({ pathName, chapterNumber }) {
           }`
 
           const res = await pk.gqlQuerySync(query)
-          console.log(res, 48)
+          // console.log(res, 48)
           if (res?.data?.documents[0]?.cvIndex) {
             const versesArray = res.data.documents[0].cvIndex.verses.map((verse) => ({
               verseRange: verse.verse[0]?.verseRange || '',
