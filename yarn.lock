@@ -3510,10 +3510,10 @@ prop-types@^15.8.1:
     object-assign "^4.1.1"
     react-is "^16.13.1"
 
-proskomma-core@^0.10.4:
-  version "0.10.4"
-  resolved "https://registry.yarnpkg.com/proskomma-core/-/proskomma-core-0.10.4.tgz#9c07fae32ef6211bd5afb0b8832818b62c4b2280"
-  integrity sha512-gsaGL5AEEnvPkkkXnD9T3KcWtrTcUUse4phYcUqvxlWWawyLtFMO663N0RM33uQTEEhaVosRqAz04hyc5iVg+w==
+proskomma-core@^0.10.5:
+  version "0.10.5"
+  resolved "https://registry.npmjs.org/proskomma-core/-/proskomma-core-0.10.5.tgz#c8ac61fa0b0893e6bf48eaa3ff92856497d7fbef"
+  integrity sha512-BDMxXF5RbKIa/yO3gfMQs8OH5JUTsJvdShArp423Rshok9+3a51Yrr0vdh65s1WZPNb20ZTJL657tdPtDOlghA==
   dependencies:
     "@babel/preset-env" "^7.20.2"
     "@graphql-tools/schema" "^9.0.3"
@@ -3875,6 +3875,7 @@ stream@0.0.2:
     emitter-component "^1.1.1"
 
 "string-width-cjs@npm:string-width@^4.2.0", string-width@^4.1.0:
+  name string-width-cjs
   version "4.2.3"
   resolved "https://registry.yarnpkg.com/string-width/-/string-width-4.2.3.tgz#269c7117d27b05ad2e536830a8ec895ef9c6d010"
   integrity sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==

@@ -196,26 +196,6 @@ export const versification = async () => {
 
       const chapterNumber = 23
 
-      // let docSetQueryId = `{ documents {
-      //             docSetId
-      //             }
-      //         }`
-
-      // let result1 = await pk.gqlQuery(docSetQueryId)
-
-      // console.log(result1, 200)
-
-      // let docSetQuery = `{ docSet(id: "eng_webbe")
-      //     { documents
-      //       { mappedCvs(chapter: "${chapterNumber}", mappedDocSetId: "rus_rsb")
-      //         {
-      //           scopeLabels
-      //           text
-      //         }
-      //       }
-      //     }
-      //   }`
-
       let docSetQuery = `{ docSet(id: "eng_asv"){
            documents {
             mappedCvs(chapter: "${chapterNumber}", mappedDocSetId: "rus_rsb"){
@@ -226,40 +206,9 @@ export const versification = async () => {
         }
       }`
       let result = await pk.gqlQuery(docSetQuery)
-
-      // console.log(result, 209)
-
-      // let docSetQuery = `{
-      //   docSets {
-      //     documents {
-      //       mappedCvs(chapter: "22", mappedDocSetId: "rus_rsb") {
-      //         text
-      //     }
-      //   }
-      //   }
-      // }`
-
-      // let result = await pk.gqlQuery(docSetQuery)
-
       console.log(result, 209)
 
-      // let query = `{docSet(id: "eng_webbe") {
-      //     documents {
-      //       cvIndex(chapter:${chapterNumber}) {
-      //         verses {
-      //           verse {
-      //             verseRange
-      //             text
-      //           }
-      //         }
-      //       }
-      //     }
-      //   }}`
-
-      // let result = await pk.gqlQuery(docSetQuery)
-      // console.log(result, 51)
-
-      const mappedCVs = result.data.docSet.documents[0].mappedCvs[0][0]
+      const mappedCVs = result.data.docSet.documents[0].mappedCvs[1][0]
       console.log(mappedCVs, 54)
     } catch (err) {
       console.log(err, 81)
