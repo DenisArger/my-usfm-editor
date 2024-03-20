@@ -15,7 +15,7 @@
     "cheerio": "^1.0.0-rc.12",
     "deep-copy-all": "^1.3.4",
     "fs-extra": "^11.2.0",
-    "proskomma-core": "^0.10.4",
+    "proskomma-core": "^0.10.5",
     "proskomma-json-tools": "^0.8.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
