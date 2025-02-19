@@ -86,7 +86,7 @@ jobs:
               updateProjectV2ItemFieldValue(input: { 
                 projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
                 itemId: \"$ISSUE_ID\", 
-                fieldId: \"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\", 
+                fieldId: \"${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}\", 
                 value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
               }) { clientMutationId }
             }"
