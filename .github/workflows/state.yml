@@ -1,12 +1,27 @@
 name: Move Issue to IN_PROGRESS on Branch Creation
 
 on:
-    create:
+  create:
 
 jobs:
   update_issue_status:
     runs-on: ubuntu-latest
     steps:
+      - name: Extract Issue Number from Branch Name
+        id: extract_issue
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          echo "🔍 Branch Name: $BRANCH_NAME"
+
+          ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '\d+' | head -n 1)
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "🚨 Ошибка: Не удалось извлечь номер Issue из имени ветки!"
+            exit 1
+          fi
+
+          echo "✅ Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
+          echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
+
       - name: Get Issue ID from Project
         id: get_issue_id
         run: |
@@ -17,8 +32,15 @@ jobs:
 
           echo "🔍 Full API Response: $RESPONSE"  # Debugging
 
-          # Извлекаем ID Issue
-          ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == ${ISSUE_NUMBER}) | .id")
+          # Проверяем, что список задач не пустой
+          NODE_COUNT=$(echo "$RESPONSE" | jq '.data.node.items.nodes | length')
+          if [ "$NODE_COUNT" -eq 0 ]; then
+            echo "🚨 Ошибка: В проекте нет задач!"
+            exit 1
+          fi
+
+          # Фильтруем ID по номеру Issue
+          ISSUE_ID=$(echo "$RESPONSE" | jq --argjson num "$ISSUE_NUMBER" -r '.data.node.items.nodes[] | select(.content.number == $num) | .id')
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
             echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден!"
@@ -30,7 +52,27 @@ jobs:
 
       - name: Move Issue to IN_PROGRESS
         run: |
-          curl -X POST https://api.github.com/graphql \
+          RESPONSE=$(curl -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
-            -d "{\"query\":\"mutation { updateProjectV2ItemFieldValue(input: { projectId: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\", itemId: \\\"$ISSUE_ID\\\", fieldId: \\\"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\\\", value: {singleSelectOptionId:\\\"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\\\"} }) { clientMutationId } }\"}"
+            -d @- <<EOF
+          {
+            "query": "mutation {
+              updateProjectV2ItemFieldValue(input: { 
+                projectId: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\", 
+                itemId: \\\"$ISSUE_ID\\\", 
+                fieldId: \\\"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\\\", 
+                value: { singleSelectOptionId: \\\"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\\\" }
+              }) { clientMutationId }
+            }"
+          }
+          EOF
+          )
+
+          echo "🔄 API Response: $RESPONSE"
+          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
+            echo "🚨 Ошибка: Не удалось обновить статус Issue!"
+            exit 1
+          fi
+
+          echo "✅ Issue успешно перемещён в IN_PROGRESS!"
