@@ -26,13 +26,16 @@ jobs:
         id: get_issue_id
         run: |
           echo "🚀 Получаем ID Issue из GitHub Project..."
-          RESPONSE=$(curl -X POST https://api.github.com/graphql \
+          echo "🛠 DEBUG: ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}"
+          echo "🛠 DEBUG: ISSUE_NUMBER=$ISSUE_NUMBER"
+
+          RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
           {
             "query": "query {
-              node(id: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\") {
+              node(id: \"${{ secrets.ID_PROJECT_SKILLDOR }}\") {
                 ... on ProjectV2 {
                   items(first: 100) {
                     nodes {
@@ -50,6 +53,13 @@ jobs:
           echo "🔄 Полный ответ от GitHub API:"
           echo "$RESPONSE" | jq .
 
+          # Проверяем на ошибки в ответе
+          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
+            echo "🚨 Ошибка: API вернуло ошибку!"
+            echo "$RESPONSE" | jq '.errors'
+            exit 1
+          fi
+
           # Извлекаем ISSUE_ID
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
@@ -63,35 +73,28 @@ jobs:
 
       - name: Move Issue to IN_PROGRESS
         run: |
-          echo "🚀 Обновляем статус Issue..."
-          echo "🛠 DEBUG: ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}"
-          echo "🛠 DEBUG: ISSUE_ID=$ISSUE_ID"
-          echo "🛠 DEBUG: ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}"
-          echo "🛠 DEBUG: ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}"
-
-          RESPONSE=$(curl -X POST https://api.github.com/graphql \
+          echo "🚀 Перемещаем Issue в статус IN_PROGRESS..."
+          RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
           {
             "query": "mutation {
               updateProjectV2ItemFieldValue(input: { 
-                projectId: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\", 
-                itemId: \\\"$ISSUE_ID\\\", 
-                fieldId: \\\"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\\\", 
-                value: { singleSelectOptionId: \\\"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\\\" }
+                projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
+                itemId: \"$ISSUE_ID\", 
+                fieldId: \"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\", 
+                value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
               }) { clientMutationId }
             }"
           }
           EOF
           )
 
-          echo "🔄 Полный ответ от GitHub API:"
-          echo "$RESPONSE" | jq .
-
+          echo "🔄 API Response: $RESPONSE"
+          # Проверяем на ошибки
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: Не удалось обновить статус Issue!"
-            echo "📌 Детали ошибки:"
             echo "$RESPONSE" | jq '.errors'
             exit 1
           fi
