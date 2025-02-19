@@ -1,0 +1,36 @@
+name: Move Issue to IN_PROGRESS on Branch Creation
+
+on:
+    create:
+
+jobs:
+  move_issue_to_in_progress:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Extract issue number from branch name
+        id: extract_issue_number
+        run: |
+          echo "ISSUE_NUMBER=$(echo ${GITHUB_REF##*/} | sed -E 's/.*-([0-9]+)-.*/\1/')" >> $GITHUB_ENV
+
+      - name: Get Issue ID from Project
+        id: get_issue_id
+        run: |
+          RESPONSE=$(curl -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"query { node(id: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }\"}")
+          ISSUE_ID=$(echo $RESPONSE | jq -r ".data.node.items.nodes[] | select(.content.number == ${ISSUE_NUMBER}) | .id")
+          echo "ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
+
+      - name: Move Issue to IN_PROGRESS in Project V2
+        run: |
+          curl -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", itemId: \"${{ env.ISSUE_ID }}\", fieldId: \"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\", value: {singleSelectOptionId:\"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\"} }) { clientMutationId } }"
+            }'
