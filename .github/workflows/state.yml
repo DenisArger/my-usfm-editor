@@ -20,7 +20,7 @@ jobs:
         id: get_issue_id
         run: |
           RESPONSE=$(curl -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
             -d "{\"query\":\"query { node(id: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }\"}")
           ISSUE_ID=$(echo $RESPONSE | jq -r ".data.node.items.nodes[] | select(.content.number == ${ISSUE_NUMBER}) | .id")
