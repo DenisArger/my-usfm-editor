@@ -28,27 +28,29 @@ jobs:
           RESPONSE=$(curl -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
-            -d "{\"query\":\"query { node(id: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }\"}")
+            -d @- <<EOF
+            {
+              "query": "mutation {
+                updateProjectV2ItemFieldValue(input: { 
+                projectId: \"$ID_PROJECT_SKILLDOR\", 
+                itemId: \"$ISSUE_ID\", 
+                fieldId: \"$ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR\", 
+                value: { singleSelectOptionId: \"$ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR\" }
+            }) { clientMutationId }
+          }"
+          }
+          EOF
+          )
 
-          echo "🔍 Full API Response: $RESPONSE"  # Debugging
+          echo "🔄 API Response: $RESPONSE"
 
-          # Проверяем, что список задач не пустой
-          NODE_COUNT=$(echo "$RESPONSE" | jq '.data.node.items.nodes | length')
-          if [ "$NODE_COUNT" -eq 0 ]; then
-            echo "🚨 Ошибка: В проекте нет задач!"
-            exit 1
+          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
+          echo "🚨 Ошибка: Не удалось обновить статус Issue!"
+          exit 1
           fi
 
-          # Фильтруем ID по номеру Issue
-          ISSUE_ID=$(echo "$RESPONSE" | jq --argjson num "$ISSUE_NUMBER" -r '.data.node.items.nodes[] | select(.content.number == $num) | .id')
+          echo "✅ Issue успешно перемещён в IN_PROGRESS!"
 
-          if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
-            echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден!"
-            exit 1
-          fi
-
-          echo "✅ Найден ISSUE_ID: $ISSUE_ID"
-          echo "ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
 
       - name: Move Issue to IN_PROGRESS
         run: |
