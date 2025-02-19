@@ -11,7 +11,7 @@ jobs:
         id: get_issue_id
         run: |
           RESPONSE=$(curl -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
             -d "{\"query\":\"query { node(id: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }\"}")
 
@@ -31,6 +31,6 @@ jobs:
       - name: Move Issue to IN_PROGRESS
         run: |
           curl -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
             -d "{\"query\":\"mutation { updateProjectV2ItemFieldValue(input: { projectId: \\\"${{ secrets.ID_PROJECT_SKILLDOR }}\\\", itemId: \\\"$ISSUE_ID\\\", fieldId: \\\"${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}\\\", value: {singleSelectOptionId:\\\"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\\\"} }) { clientMutationId } }\"}"
