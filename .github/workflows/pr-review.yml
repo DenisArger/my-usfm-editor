@@ -13,7 +13,7 @@ jobs:
 
       - name: Set up environment variables
         run: |
-          echo "TOKEN_AUTOMATION=${{ secrets.TOKEN_AUTOMATION }}" >> $GITHUB_ENV
+          echo "TOKEN_AUTOMATIZATION=${{ secrets.TOKEN_AUTOMATIZATION }}" >> $GITHUB_ENV
           echo "ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_REVIEW_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_REVIEW_SKILLDOR }}" >> $GITHUB_ENV
@@ -21,23 +21,44 @@ jobs:
       - name: Update task status to REVIEW
         run: |
           set -euo pipefail
+         
+          error_exit() {
+            exit 1
+          }
 
           CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
-          ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
-          [ -z "$ISSUE_NUMBER" ] && { echo "Error: Failed to extract issue number!"; exit 1; }
 
+          ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
+          if [ -z "$ISSUE_NUMBER" ]; then
+            error_exit "Failed to extract issue number from branch name!"
+          fi
+
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"}'
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer $TOKEN_AUTOMATION" \
+            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d '{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number } } } } } } }"}')
+            -d "$GRAPHQL_QUERY") || error_exit "Error executing GraphQL query"
+          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
+            error_exit "Errors received from GitHub API: $(echo "$RESPONSE" | jq '.errors')"
+          fi
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-          [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ] && { echo "Error: Issue #$ISSUE_NUMBER not found in the project!"; exit 1; }
+          if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
+            error_exit "Issue with number $ISSUE_NUMBER not found in the project!"
+          fi
 
-          curl -s -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer $TOKEN_AUTOMATION" \
+          GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
+          MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d '{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}' \
-            || { echo "Error: Failed to update issue status!"; exit 1; }
+            -d "$GRAPHQL_MUTATION") || error_exit "Error executing GraphQL mutation"
+          echo "$MUTATION_RESPONSE" | jq . | tee -a "$LOG_FILE"
+          if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
+            error_exit "Failed to update issue status: $(echo "$MUTATION_RESPONSE" | jq '.errors')"
+          fi
 
-          echo "Issue #$ISSUE_NUMBER status updated to REVIEW"
+      - name: Upload log file
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-review-log
+          path: pr_review.log
