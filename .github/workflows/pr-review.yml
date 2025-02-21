@@ -24,20 +24,30 @@ jobs:
 
           CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
           ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
-          [ -z "$ISSUE_NUMBER" ] && { echo "Error: Failed to extract issue number!"; exit 1; }
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "Error: Unable to extract issue number from branch name!" >&2
+            exit 1
+          fi
 
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number } } } } } } }"}'
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATION" \
             -H "Content-Type: application/json" \
-            -d '{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number } } } } } } }"}')
+            -d "$GRAPHQL_QUERY")
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-          [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ] && { echo "Error: Issue #$ISSUE_NUMBER not found in the project!"; exit 1; }
+          if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
+            echo "Error: Issue $ISSUE_NUMBER not found in the project!" >&2
+            exit 1
+          fi
 
-          curl -s -X POST https://api.github.com/graphql \
+          GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
+          MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATION" \
             -H "Content-Type: application/json" \
-            -d '{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}' \
-            || { echo "Error: Failed to update issue status!"; exit 1; }
+            -d "$GRAPHQL_MUTATION")
 
-          echo "Issue #$ISSUE_NUMBER status updated to REVIEW"
+          if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
+            echo "Error: Failed to update issue status!" >&2
+            exit 1
+          fi
