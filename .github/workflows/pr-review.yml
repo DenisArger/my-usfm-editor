@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/upload-artifact@v4
+        uses: actions/checkout@v3
 
       - name: Set up environment variables
         run: |
@@ -74,7 +74,7 @@ jobs:
           log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на REVIEW"
 
       - name: Upload log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pr-review-log
           path: pr_review.log
