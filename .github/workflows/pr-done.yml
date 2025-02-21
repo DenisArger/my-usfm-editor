@@ -19,6 +19,8 @@ jobs:
           echo "ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_DONE_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_DONE_SKILLDOR }}" >> $GITHUB_ENV
+          echo "ID_COLUMN_STATUS_BLOCKED_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_BLOCKED_SKILLDOR }}" >> $GITHUB_ENV
+          echo "ID_COLUMN_STATUS_TO_DO_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_TO_DO_SKILLDOR }}" >> $GITHUB_ENV
 
       - name: Update task status to DONE
         run: |
@@ -78,6 +80,79 @@ jobs:
           fi
 
           log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на DONE"
+
+      - name: Process blocked tasks and update to TODO if unblocked
+        run: |
+          set -euo pipefail
+
+          log() {
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a pr_done.log
+          }
+          error_exit() {
+            log "🚨 Ошибка: $1"
+            exit 1
+          }
+
+          log "==================== Анализ заблокированных задач ===================="
+
+          # Обновленный GraphQL-запрос для получения всех задач проекта с данными Issue и статусом (поле "Status")
+          GRAPHQL_QUERY_BLOCKED='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title body } } fieldValueByName(name: \"Status\") { ... on ProjectV2SingleSelectFieldValue { optionId name } } } } } } }"}'
+          log "📡 Получаем все задачи проекта для анализа заблокированных"
+          RESPONSE_ALL=$(curl -s -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+            -H "Content-Type: application/json" \
+            -d "$GRAPHQL_QUERY_BLOCKED") || error_exit "Ошибка при выполнении GraphQL-запроса для всех задач"
+          if echo "$RESPONSE_ALL" | jq -e '.errors' >/dev/null; then
+            error_exit "Получены ошибки от GitHub API: $(echo "$RESPONSE_ALL" | jq '.errors')"
+          fi
+          log "✅ Данные проекта успешно получены для анализа заблокированных задач"
+
+          # Фильтрация задач, находящихся в колонке заблокированных
+          BLOCKED_ITEMS=$(echo "$RESPONSE_ALL" | jq -r '.data.node.items.nodes[] | select(.fieldValueByName.optionId == "'$ID_COLUMN_STATUS_BLOCKED_SKILLDOR'") | @base64')
+          for item in $BLOCKED_ITEMS; do
+            _jq() {
+              echo ${item} | base64 --decode | jq -r ${1}
+            }
+            BLOCKED_ITEM_ID=$(_jq '.id')
+            ISSUE_NUMBER_BLOCKED=$(_jq '.content.number')
+            ISSUE_BODY=$(_jq '.content.body')
+            log "🔍 Анализируем задачу #$ISSUE_NUMBER_BLOCKED с ID $BLOCKED_ITEM_ID"
+
+            # Извлечение номера блокирующей задачи из описания (формат: "BLOCKED BY #<номер>")
+            BLOCKING_NUMBER=$(echo "$ISSUE_BODY" | grep -o -E 'BLOCKED BY #[0-9]+' | head -n 1 | grep -o -E '[0-9]+')
+            if [ -z "$BLOCKING_NUMBER" ]; then
+              log "❗ Задача #$ISSUE_NUMBER_BLOCKED не содержит информации о блокирующей задаче, пропускаем"
+              continue
+            fi
+            log "⛓ Найдена блокирующая задача: #$BLOCKING_NUMBER"
+
+            # Поиск элемента проекта, соответствующего блокирующей задаче
+            BLOCKING_ITEM=$(echo "$RESPONSE_ALL" | jq -r ".data.node.items.nodes[] | select(.content.number == $BLOCKING_NUMBER)")
+            if [ -z "$BLOCKING_ITEM" ]; then
+              log "❗ Не найдена блокирующая задача #$BLOCKING_NUMBER в проекте, пропускаем"
+              continue
+            fi
+
+            BLOCKING_STATUS=$(echo "$BLOCKING_ITEM" | jq -r '.fieldValueByName.optionId')
+            if [ "$BLOCKING_STATUS" != "$ID_COLUMN_STATUS_DONE_SKILLDOR" ]; then
+              log "🔒 Блокирующая задача #$BLOCKING_NUMBER не выполнена (статус: $BLOCKING_STATUS), задача #$ISSUE_NUMBER_BLOCKED остается заблокированной"
+              continue
+            fi
+
+            log "✅ Блокирующая задача #$BLOCKING_NUMBER выполнена, переносим задачу #$ISSUE_NUMBER_BLOCKED в TODO"
+
+            # Отправляем GraphQL-мутацию для обновления статуса заблокированной задачи на TODO
+            GRAPHQL_MUTATION_TODO='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$BLOCKED_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_TO_DO_SKILLDOR"'\" } }) { clientMutationId } }"}'
+            MUTATION_TODO_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
+              -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+              -H "Content-Type: application/json" \
+              -d "$GRAPHQL_MUTATION_TODO") || error_exit "Ошибка при выполнении GraphQL-мутации для задачи #$ISSUE_NUMBER_BLOCKED"
+            echo "$MUTATION_TODO_RESPONSE" | jq . | tee -a pr_done.log
+            if echo "$MUTATION_TODO_RESPONSE" | jq -e '.errors' >/dev/null; then
+              error_exit "Не удалось обновить статус задачи #$ISSUE_NUMBER_BLOCKED: $(echo "$MUTATION_TODO_RESPONSE" | jq '.errors')"
+            fi
+            log "🎉 Задача #$ISSUE_NUMBER_BLOCKED успешно переведена в TODO"
+          done
 
       - name: Upload log file
         uses: actions/upload-artifact@v4
