@@ -13,7 +13,7 @@ jobs:
 
       - name: Set up environment variables
         run: |
-          echo "TOKEN_AUTOMATIZATION=${{ secrets.TOKEN_AUTOMATIZATION }}" >> $GITHUB_ENV
+          echo "TOKEN_AUTOMATION=${{ secrets.TOKEN_AUTOMATION }}" >> $GITHUB_ENV
           echo "ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_REVIEW_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_REVIEW_SKILLDOR }}" >> $GITHUB_ENV
@@ -22,59 +22,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          LOG_FILE="pr_review.log"
-          log() {
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
-          }
-          error_exit() {
-            log "🚨 Ошибка: $1"
-            exit 1
-          }
-
-          log "==================== Запуск workflow для обновления статуса на REVIEW ===================="
-
           CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
-          log "PR ветка: $CURRENT_BRANCH"
-
           ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
-          if [ -z "$ISSUE_NUMBER" ]; then
-            error_exit "Не удалось извлечь номер задачи из имени ветки!"
-          fi
-          log "Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
+          [ -z "$ISSUE_NUMBER" ] && { echo "Error: Failed to extract issue number!"; exit 1; }
 
-          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"}'
-          log "📡 Отправляем GraphQL-запрос для получения элементов проекта..."
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+            -H "Authorization: Bearer $TOKEN_AUTOMATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_QUERY") || error_exit "Ошибка при выполнении GraphQL-запроса"
-          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            error_exit "Получены ошибки от GitHub API: $(echo "$RESPONSE" | jq '.errors')"
-          fi
-          log "✅ Данные проекта успешно получены"
+            -d '{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number } } } } } } }"}')
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-          if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
-            error_exit "Issue с номером $ISSUE_NUMBER не найден в проекте!"
-          fi
-          log "✅ Найден ISSUE_ITEM_ID: $ISSUE_ITEM_ID"
+          [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ] && { echo "Error: Issue #$ISSUE_NUMBER not found in the project!"; exit 1; }
 
-          GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
-          log "📡 Отправляем GraphQL-мутацию для обновления статуса задачи на REVIEW..."
-          MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
-            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+          curl -s -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer $TOKEN_AUTOMATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутационной"
-          log "🔄 Ответ GitHub API:"
-          echo "$MUTATION_RESPONSE" | jq . | tee -a "$LOG_FILE"
-          if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
-            error_exit "Не удалось обновить статус задачи: $(echo "$MUTATION_RESPONSE" | jq '.errors')"
-          fi
+            -d '{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}' \
+            || { echo "Error: Failed to update issue status!"; exit 1; }
 
-          log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на REVIEW"
-
-      - name: Upload log file
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-review-log
-          path: pr_review.log
+          echo "Issue #$ISSUE_NUMBER status updated to REVIEW"
