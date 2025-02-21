@@ -33,24 +33,16 @@ jobs:
 
           log "==================== Запуск workflow для обновления статуса на REVIEW ===================="
 
-          # Извлекаем имя ветки из события PR (ветка, с которой открыт PR)
           CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
           log "PR ветка: $CURRENT_BRANCH"
 
-          # Извлекаем номер Issue из имени ветки (например, если ветка называется feature-denisarger-66-test)
           ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
           if [ -z "$ISSUE_NUMBER" ]; then
             error_exit "Не удалось извлечь номер задачи из имени ветки!"
           fi
           log "Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
 
-          # Шаг 1. Получаем список элементов проекта через GraphQL-запрос
-          GRAPHQL_QUERY=$(cat <<EOF
-{
-  "query": "query { node(id: \"$ID_PROJECT_SKILLDOR\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"
-}
-EOF
-          )
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"}'
           log "📡 Отправляем GraphQL-запрос для получения элементов проекта..."
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
@@ -61,25 +53,18 @@ EOF
           fi
           log "✅ Данные проекта успешно получены"
 
-          # Извлекаем ID элемента (item ID), соответствующего номеру Issue
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
           if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
             error_exit "Issue с номером $ISSUE_NUMBER не найден в проекте!"
           fi
           log "✅ Найден ISSUE_ITEM_ID: $ISSUE_ITEM_ID"
 
-          # Шаг 2. Обновляем статус задачи через GraphQL-мутацию на REVIEW
-          GRAPHQL_MUTATION=$(cat <<EOF
-{
-  "query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"$ID_PROJECT_SKILLDOR\", itemId: \"$ISSUE_ITEM_ID\", fieldId: \"$ID_COLUMN_STATUS_SKILLDOR\", value: { singleSelectOptionId: \"$ID_COLUMN_STATUS_REVIEW_SKILLDOR\" } }) { clientMutationId } }"
-}
-EOF
-          )
+          GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
           log "📡 Отправляем GraphQL-мутацию для обновления статуса задачи на REVIEW..."
           MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутации"
+            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутационной"
           log "🔄 Ответ GitHub API:"
           echo "$MUTATION_RESPONSE" | jq . | tee -a "$LOG_FILE"
           if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
