@@ -16,7 +16,6 @@ jobs:
           ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '\d+' | head -n 1)
           if [ -z "$ISSUE_NUMBER" ]; then
             echo "🚨 Ошибка: Не удалось извлечь номер Issue из имени ветки!"
-            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
@@ -49,6 +48,9 @@ jobs:
           EOF
           )
 
+          echo "🔄 Полный ответ от GitHub API:"
+          echo "$RESPONSE" | jq .
+
           # Проверяем на ошибки в ответе
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: API вернуло ошибку при получении Issue ID!"
@@ -58,6 +60,9 @@ jobs:
 
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
           ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
+
+          # Проверим, что URL не пустой
+          echo "🔗 Проверка ссылки на Issue: $ISSUE_URL"
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
             echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден в проекте!"
@@ -90,9 +95,12 @@ jobs:
           EOF
           )
 
+          echo "🔄 API Response:"
+          echo "$RESPONSE" | jq .
+
+          # Проверяем на ошибки
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: Не удалось обновить статус Issue!"
-            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
@@ -101,10 +109,11 @@ jobs:
       - name: Send Telegram Notification
         if: success() || failure()
         run: |
-          if [ "${{ env.status }}" == "error" ]; then
-            MESSAGE="🚨 Процесс перемещения Issue в статус IN_PROGRESS завершился с ошибкой.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
-          else
+          # Определяем сообщение для Telegram
+          if [ "${{ job.status }}" == "success" ]; then
             MESSAGE="✅ Issue успешно перемещён в статус IN_PROGRESS.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
+          else
+            MESSAGE="🚨 Ошибка при перемещении Issue в статус IN_PROGRESS.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
           fi
 
           # Отправляем сообщение в Telegram
