@@ -51,28 +51,24 @@ jobs:
           echo "🔄 Полный ответ от GitHub API:"
           echo "$RESPONSE" | jq .
 
-          # Проверяем на ошибки в ответе
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: API вернуло ошибку при получении Issue ID!"
-            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
           ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
 
-          # Проверим, что URL не пустой
           echo "🔗 Проверка ссылки на Issue: $ISSUE_URL"
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
             echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден в проекте!"
-            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
           echo "✅ Найден ISSUE_ID: $ISSUE_ID"
-          echo "ISSUE_URL=$ISSUE_URL"
           echo "ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
+          echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
       - name: Move Issue to IN_PROGRESS
         run: |
@@ -98,7 +94,6 @@ jobs:
           echo "🔄 API Response:"
           echo "$RESPONSE" | jq .
 
-          # Проверяем на ошибки
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: Не удалось обновить статус Issue!"
             exit 1
@@ -109,14 +104,18 @@ jobs:
       - name: Send Telegram Notification
         if: success() || failure()
         run: |
-          # Определяем сообщение для Telegram
           if [ "${{ job.status }}" == "success" ]; then
-            MESSAGE="✅ Issue успешно перемещён в статус IN_PROGRESS.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
+            MESSAGE="✅ *Issue успешно перемещён в статус IN_PROGRESS.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
           else
-            MESSAGE="🚨 Ошибка при перемещении Issue в статус IN_PROGRESS.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
+            MESSAGE="🚨 *Ошибка при перемещении Issue в статус IN_PROGRESS!*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
           fi
 
-          # Отправляем сообщение в Telegram
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=$MESSAGE"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
+          }
+          EOF
