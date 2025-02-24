@@ -39,7 +39,7 @@ jobs:
                   items(first: 100) {
                     nodes {
                       id
-                      content { ... on Issue { number title } }
+                      content { ... on Issue { number title url } }
                     }
                   }
                 }
@@ -57,6 +57,7 @@ jobs:
           fi
 
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
+          ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
             echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден в проекте!"
@@ -65,6 +66,7 @@ jobs:
           fi
 
           echo "✅ Найден ISSUE_ID: $ISSUE_ID"
+          echo "ISSUE_URL=$ISSUE_URL"
           echo "ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
 
       - name: Move Issue to IN_PROGRESS
@@ -100,9 +102,9 @@ jobs:
         if: success() || failure()
         run: |
           if [ "${{ env.status }}" == "error" ]; then
-            MESSAGE="🚨 Процесс перемещения Issue в статус IN_PROGRESS завершился с ошибкой."
+            MESSAGE="🚨 Процесс перемещения Issue в статус IN_PROGRESS завершился с ошибкой.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
           else
-            MESSAGE="✅ Issue успешно перемещён в статус IN_PROGRESS."
+            MESSAGE="✅ Issue успешно перемещён в статус IN_PROGRESS.\nНомер Issue: $ISSUE_NUMBER\nСсылка на Issue: $ISSUE_URL"
           fi
 
           # Отправляем сообщение в Telegram
