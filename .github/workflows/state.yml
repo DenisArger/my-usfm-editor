@@ -16,6 +16,7 @@ jobs:
           ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '\d+' | head -n 1)
           if [ -z "$ISSUE_NUMBER" ]; then
             echo "🚨 Ошибка: Не удалось извлечь номер Issue из имени ветки!"
+            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
@@ -26,11 +27,7 @@ jobs:
         id: get_issue_id
         run: |
           echo "🚀 Получаем ID Issue из GitHub Project..."
-          echo "🛠 DEBUG: ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}"
-          echo "🛠 DEBUG: ISSUE_NUMBER=$ISSUE_NUMBER"
-          echo "🛠 DEBUG: ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_NEED_DEFINITION_SKILLDOR }}"
-          echo "🛠 DEBUG: ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}"
-
+          
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
@@ -52,21 +49,18 @@ jobs:
           EOF
           )
 
-          echo "🔄 Полный ответ от GitHub API:"
-          echo "$RESPONSE" | jq .
-
           # Проверяем на ошибки в ответе
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            echo "🚨 Ошибка: API вернуло ошибку!"
-            echo "$RESPONSE" | jq '.errors'
+            echo "🚨 Ошибка: API вернуло ошибку при получении Issue ID!"
+            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
-          # Извлекаем ISSUE_ID
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
             echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден в проекте!"
+            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
@@ -94,13 +88,24 @@ jobs:
           EOF
           )
 
-          echo "🔄 API Response:"
-          echo "$RESPONSE" | jq .
-
-          # Проверяем на ошибки
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
             echo "🚨 Ошибка: Не удалось обновить статус Issue!"
+            echo "status=error" >> $GITHUB_ENV
             exit 1
           fi
 
           echo "✅ Issue успешно перемещён в IN_PROGRESS!"
+
+      - name: Send Telegram Notification
+        if: success() || failure()
+        run: |
+          if [ "${{ env.status }}" == "error" ]; then
+            MESSAGE="🚨 Процесс перемещения Issue в статус IN_PROGRESS завершился с ошибкой."
+          else
+            MESSAGE="✅ Issue успешно перемещён в статус IN_PROGRESS."
+          fi
+
+          # Отправляем сообщение в Telegram
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE"
