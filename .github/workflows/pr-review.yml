@@ -17,6 +17,8 @@ jobs:
           echo "ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}" >> $GITHUB_ENV
           echo "ID_COLUMN_STATUS_REVIEW_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_REVIEW_SKILLDOR }}" >> $GITHUB_ENV
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
 
       - name: Update task status to REVIEW
         run: |
@@ -42,7 +44,7 @@ jobs:
           fi
           log "Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
 
-          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"}'
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title url } } } } } } }"}'
           log "📡 Отправляем GraphQL-запрос для получения элементов проекта..."
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
@@ -54,6 +56,8 @@ jobs:
           log "✅ Данные проекта успешно получены"
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
+          ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
+
           if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
             error_exit "Issue с номером $ISSUE_NUMBER не найден в проекте!"
           fi
@@ -64,7 +68,7 @@ jobs:
           MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутационной"
+            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутации"
           log "🔄 Ответ GitHub API:"
           echo "$MUTATION_RESPONSE" | jq . | tee -a "$LOG_FILE"
           if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
@@ -72,6 +76,29 @@ jobs:
           fi
 
           log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на REVIEW"
+
+          echo "✅ Статус задачи обновлён!" >> $GITHUB_ENV
+          echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
+          echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+
+      - name: Send Telegram Notification
+        if: success() || failure()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            MESSAGE="✅ *Issue переведён в статус REVIEW.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+          else
+            MESSAGE="🚨 *Ошибка при обновлении Issue до REVIEW!*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+          fi
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
+          }
+          EOF
 
       - name: Upload log file
         uses: actions/upload-artifact@v4
