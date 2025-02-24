@@ -2,7 +2,7 @@ name: Update Issue Status to REVIEW on PR Open
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened, synchronize]
 
 jobs:
   update-status:
@@ -19,6 +19,38 @@ jobs:
           echo "ID_COLUMN_STATUS_REVIEW_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_REVIEW_SKILLDOR }}" >> $GITHUB_ENV
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
+
+      - name: Wait for mergeable state
+        run: sleep 10
+
+      - name: Check for conflicts
+        id: check_conflicts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+            core.info(`Mergeable status: ${pr.mergeable}`);
+            return { mergeable: pr.mergeable };
+
+      - name: Handle conflicts
+        if: steps.check_conflicts.outputs.mergeable == 'false'
+        run: |
+          MESSAGE="🚨 *PR #${{ github.event.pull_request.number }}* имеет конфликты. Разрешите конфликты перед обновлением статуса."
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
+          }
+          EOF
+          exit 1
 
       - name: Update task status to REVIEW
         run: |
