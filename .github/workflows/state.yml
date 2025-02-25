@@ -13,7 +13,7 @@ jobs:
           BRANCH_NAME="${{ github.ref_name }}"
           ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '\d+' | head -n 1)
           if [ -z "$ISSUE_NUMBER" ]; then
-            echo "🚨 Error: Failed to extract issue number from branch name!"
+            echo "Error: Failed to extract issue number from branch name!"
             exit 1
           fi
           echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
@@ -27,23 +27,23 @@ jobs:
             -d @- <<EOF
           {
             "query": "query {
-            node(id: \"${{ secrets.ID_PROJECT_SKILLDOR }}\") {
-            ... on ProjectV2 {
-            items(first: 100) {
-            nodes {
-            id
-            content { ... on Issue { number title url } }
+              node(id: \"${{ secrets.ID_PROJECT_SKILLDOR }}\") {
+              ... on ProjectV2 {
+              items(first: 100) {
+                  nodes {
+                      id
+                      content { ... on Issue { number title url } }
+                     }
+                    }
                   }
-              }
-            }
-            }
-            }"
+                }
+              }"
           }
           EOF
           )
 
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            echo "🚨 Error: API returned an error when fetching issue ID!"
+            echo "Error: API returned an error when fetching issue ID!"
             exit 1
           fi
 
@@ -51,7 +51,7 @@ jobs:
           ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
 
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
-            echo "🚨 Error: Issue with number ${ISSUE_NUMBER} not found in project!"
+            echo "Error: Issue with number ${ISSUE_NUMBER} not found in project!"
             exit 1
           fi
 
@@ -66,19 +66,19 @@ jobs:
             -d @- <<EOF
           {
             "query": "mutation {
-            updateProjectV2ItemFieldValue(input: { 
-            projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
-            itemId: \"$ISSUE_ID\", 
-            fieldId: \"${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}\", 
-            value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
-            }) { clientMutationId }
-            }"
-            }
-            EOF
+              updateProjectV2ItemFieldValue(input: { 
+              projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
+              itemId: \"$ISSUE_ID\", 
+              fieldId: \"${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}\", 
+              value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
+                  }) { clientMutationId }
+                }"
+              }
+          EOF
           )
 
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            echo "🚨 Error: Failed to update issue status!"
+            echo "Error: Failed to update issue status!"
             exit 1
           fi
 
@@ -94,9 +94,9 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
-          {             
-              "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
-              "text": "$MESSAGE",
-              "parse_mode": "Markdown"
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
           }
           EOF
