@@ -40,7 +40,7 @@ jobs:
       - name: Handle conflicts
         if: steps.check_conflicts.outputs.mergeable == 'false'
         run: |
-          MESSAGE="🚨 *PR #${{ github.event.pull_request.number }}* имеет конфликты. Разрешите конфликты перед обновлением статуса."
+          MESSAGE="🚨 *PR #${{ github.event.pull_request.number }}* has conflicts. Please resolve conflicts before updating the status."
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
@@ -56,60 +56,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          LOG_FILE="pr_review.log"
-          log() {
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
-          }
-          error_exit() {
-            log "🚨 Ошибка: $1"
-            exit 1
-          }
-
-          log "==================== Запуск workflow для обновления статуса на REVIEW ===================="
-
           CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
-          log "PR ветка: $CURRENT_BRANCH"
-
           ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
           if [ -z "$ISSUE_NUMBER" ]; then
-            error_exit "Не удалось извлечь номер задачи из имени ветки!"
+            echo "Error: Could not extract issue number from branch name!"
+            exit 1
           fi
-          log "Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
 
           GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title url } } } } } } }"}'
-          log "📡 Отправляем GraphQL-запрос для получения элементов проекта..."
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_QUERY") || error_exit "Ошибка при выполнении GraphQL-запроса"
+            -d "$GRAPHQL_QUERY") || { echo "Error: Failed to execute GraphQL query"; exit 1; }
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            error_exit "Получены ошибки от GitHub API: $(echo "$RESPONSE" | jq '.errors')"
+            echo "Error: GitHub API returned errors: $(echo "$RESPONSE" | jq '.errors')"
+            exit 1
           fi
-          log "✅ Данные проекта успешно получены"
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
           ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
 
           if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
-            error_exit "Issue с номером $ISSUE_NUMBER не найден в проекте!"
+            echo "Error: Issue with number $ISSUE_NUMBER not found in the project!"
+            exit 1
           fi
-          log "✅ Найден ISSUE_ITEM_ID: $ISSUE_ITEM_ID"
 
           GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
-          log "📡 Отправляем GraphQL-мутацию для обновления статуса задачи на REVIEW..."
           MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
-            -d "$GRAPHQL_MUTATION") || error_exit "Ошибка при выполнении GraphQL-мутации"
-          log "🔄 Ответ GitHub API:"
-          echo "$MUTATION_RESPONSE" | jq . | tee -a "$LOG_FILE"
+            -d "$GRAPHQL_MUTATION") || { echo "Error: Failed to execute GraphQL mutation"; exit 1; }
           if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
-            error_exit "Не удалось обновить статус задачи: $(echo "$MUTATION_RESPONSE" | jq '.errors')"
+            echo "Error: Failed to update issue status: $(echo "$MUTATION_RESPONSE" | jq '.errors')"
+            exit 1
           fi
 
-          log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на REVIEW"
-
-          echo "✅ Статус задачи обновлён!" >> $GITHUB_ENV
+          echo "Issue status updated to REVIEW" >> $GITHUB_ENV
           echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
           echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
@@ -117,9 +99,9 @@ jobs:
         if: success() || failure()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            MESSAGE="✅ *Issue переведён в статус REVIEW.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+            MESSAGE="✅ *Issue status updated to REVIEW.*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
           else
-            MESSAGE="🚨 *Ошибка при обновлении Issue до REVIEW!*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+            MESSAGE="🚨 *Error updating Issue to REVIEW!*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
           fi
 
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
@@ -131,9 +113,3 @@ jobs:
             "parse_mode": "Markdown"
           }
           EOF
-
-      - name: Upload log file
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-review-log
-          path: pr_review.log
