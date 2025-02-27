@@ -47,7 +47,8 @@ jobs:
           fi
           log "Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
 
-          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title } } } } } } }"}'
+          # Добавляем получение ссылки на Issue (поле url)
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title url } } } } } } }"}'
           log "📡 Отправляем GraphQL-запрос для получения элементов проекта..."
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
@@ -55,10 +56,12 @@ jobs:
             -d "$GRAPHQL_QUERY") || error_exit "Ошибка при выполнении GraphQL-запроса"
 
           ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
+          ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
           if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
             error_exit "Issue с номером $ISSUE_NUMBER не найден в проекте!"
           fi
           log "✅ Найден ISSUE_ITEM_ID: $ISSUE_ITEM_ID"
+          log "🔗 Ссылка на Issue: $ISSUE_URL"
 
           GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_DONE_SKILLDOR"'\" } }) { clientMutationId } }"}'
           log "📡 Отправляем GraphQL-мутацию для обновления статуса задачи на DONE..."
@@ -73,11 +76,17 @@ jobs:
 
           log "🎉 Статус задачи $ISSUE_NUMBER успешно обновлён на DONE"
 
-          # Отправка уведомления в Telegram о смене статуса на DONE
-          TELEGRAM_MESSAGE="✅ Статус задачи #$ISSUE_NUMBER обновлён на DONE"
+          # Отправка уведомления в Telegram о смене статуса на DONE с номером и ссылкой на Issue
+          TELEGRAM_MESSAGE="✅ *Статус задачи обновлён на DONE.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d "chat_id=$TELEGRAM_CHAT_ID" \
-            -d "text=$TELEGRAM_MESSAGE"
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+              "chat_id": "$TELEGRAM_CHAT_ID",
+              "text": "$TELEGRAM_MESSAGE",
+              "parse_mode": "Markdown"
+          }
+          EOF
 
       - name: Process blocked tasks and update to TODO if unblocked
         run: |
@@ -87,7 +96,8 @@ jobs:
 
           log "==================== Анализ заблокированных задач ===================="
 
-          GRAPHQL_QUERY_BLOCKED='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title body } } fieldValueByName(name: \"Status\") { ... on ProjectV2SingleSelectFieldValue { optionId name } } } } } } }"}'
+          # Обновляем GraphQL-запрос для получения ссылки на Issue (добавлено поле url)
+          GRAPHQL_QUERY_BLOCKED='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title body url } } fieldValueByName(name: \"Status\") { ... on ProjectV2SingleSelectFieldValue { optionId name } } } } } } }"}'
           log "📡 Получаем все задачи проекта для анализа заблокированных"
           RESPONSE_ALL=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
@@ -100,8 +110,14 @@ jobs:
             log "✅ Заблокированные задачи отсутствуют"
             TELEGRAM_MESSAGE="ℹ️ В проекте нет заблокированных задач"
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-              -d "chat_id=$TELEGRAM_CHAT_ID" \
-              -d "text=$TELEGRAM_MESSAGE"
+              -H "Content-Type: application/json" \
+              -d @- <<EOF
+            {
+              "chat_id": "$TELEGRAM_CHAT_ID",
+              "text": "$TELEGRAM_MESSAGE",
+              "parse_mode": "Markdown"
+            }
+          EOF
             exit 0
           fi
 
@@ -111,6 +127,7 @@ jobs:
             }
             BLOCKED_ITEM_ID=$(_jq '.id')
             ISSUE_NUMBER_BLOCKED=$(_jq '.content.number')
+            ISSUE_URL_BLOCKED=$(_jq '.content.url')
 
             log "✅ Обрабатываем разблокировку задачи #$ISSUE_NUMBER_BLOCKED"
             GRAPHQL_MUTATION_TODO='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$BLOCKED_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_TO_DO_SKILLDOR"'\" } }) { clientMutationId } }"}'
@@ -122,11 +139,17 @@ jobs:
 
             log "✅ Задача #$ISSUE_NUMBER_BLOCKED переведена в TODO"
             
-            # Отправка уведомления в Telegram для разблокированной задачи
-            TELEGRAM_MESSAGE="✅ Задача #$ISSUE_NUMBER_BLOCKED разблокирована и переведена в TODO"
+            # Отправка уведомления в Telegram для разблокированной задачи с номером и ссылкой
+            TELEGRAM_MESSAGE="✅ *Задача разблокирована и переведена в TODO.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER_BLOCKED\`\n🔗 [Открыть Issue]($ISSUE_URL_BLOCKED)"
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-              -d "chat_id=$TELEGRAM_CHAT_ID" \
-              -d "text=$TELEGRAM_MESSAGE"
+              -H "Content-Type: application/json" \
+              -d @- <<EOF
+            {
+              "chat_id": "$TELEGRAM_CHAT_ID",
+              "text": "$TELEGRAM_MESSAGE",
+              "parse_mode": "Markdown"
+            }
+            EOF
           done
           
       - name: Upload log file
