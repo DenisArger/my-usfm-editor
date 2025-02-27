@@ -1,4 +1,4 @@
-name: Move Issue to IN_PROGRESS on Branch Creation
+name: Move Issue to IN_PROGRESS
 
 on:
   create:
@@ -11,22 +11,16 @@ jobs:
         id: extract_issue
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
-          echo "🔍 Branch Name: $BRANCH_NAME"
-
           ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '\d+' | head -n 1)
           if [ -z "$ISSUE_NUMBER" ]; then
-            echo "🚨 Ошибка: Не удалось извлечь номер Issue из имени ветки!"
+            echo "Error: Failed to extract issue number from branch name!"
             exit 1
           fi
-
-          echo "✅ Извлечён ISSUE_NUMBER: $ISSUE_NUMBER"
           echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
 
       - name: Get Issue ID from Project
         id: get_issue_id
         run: |
-          echo "🚀 Получаем ID Issue из GitHub Project..."
-          
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
@@ -34,46 +28,38 @@ jobs:
           {
             "query": "query {
               node(id: \"${{ secrets.ID_PROJECT_SKILLDOR }}\") {
-                ... on ProjectV2 {
-                  items(first: 100) {
-                    nodes {
+              ... on ProjectV2 {
+              items(first: 100) {
+                  nodes {
                       id
                       content { ... on Issue { number title url } }
+                     }
                     }
                   }
                 }
-              }
-            }"
+              }"
           }
           EOF
           )
 
-          echo "🔄 Полный ответ от GitHub API:"
-          echo "$RESPONSE" | jq .
-
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            echo "🚨 Ошибка: API вернуло ошибку при получении Issue ID!"
+            echo "Error: API returned an error when fetching issue ID!"
             exit 1
           fi
 
           ISSUE_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
           ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
 
-          echo "🔗 Проверка ссылки на Issue: $ISSUE_URL"
-
           if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" == "null" ]; then
-            echo "🚨 Ошибка: Issue с номером ${ISSUE_NUMBER} не найден в проекте!"
+            echo "Error: Issue with number ${ISSUE_NUMBER} not found in project!"
             exit 1
           fi
 
-          echo "✅ Найден ISSUE_ID: $ISSUE_ID"
           echo "ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
           echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
       - name: Move Issue to IN_PROGRESS
         run: |
-          echo "🚀 Перемещаем Issue в IN_PROGRESS..."
-
           RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
             -H "Authorization: Bearer ${{ secrets.TOKEN_AUTOMATIZATION }}" \
             -H "Content-Type: application/json" \
@@ -81,33 +67,28 @@ jobs:
           {
             "query": "mutation {
               updateProjectV2ItemFieldValue(input: { 
-                projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
-                itemId: \"$ISSUE_ID\", 
-                fieldId: \"${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}\", 
-                value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
-              }) { clientMutationId }
-            }"
-          }
+              projectId: \"${{ secrets.ID_PROJECT_SKILLDOR }}\", 
+              itemId: \"$ISSUE_ID\", 
+              fieldId: \"${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}\", 
+              value: { singleSelectOptionId: \"${{ secrets.ID_COLUMN_STATUS_IN_PROGRESS_SKILLDOR }}\" }
+                  }) { clientMutationId }
+                }"
+              }
           EOF
           )
 
-          echo "🔄 API Response:"
-          echo "$RESPONSE" | jq .
-
           if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
-            echo "🚨 Ошибка: Не удалось обновить статус Issue!"
+            echo "Error: Failed to update issue status!"
             exit 1
           fi
-
-          echo "✅ Issue успешно перемещён в IN_PROGRESS!"
 
       - name: Send Telegram Notification
         if: success() || failure()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            MESSAGE="✅ *Issue успешно перемещён в статус IN_PROGRESS.*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+            MESSAGE="✅ *Issue successfully moved to IN_PROGRESS.*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
           else
-            MESSAGE="🚨 *Ошибка при перемещении Issue в статус IN_PROGRESS!*\n\n📌 *Номер Issue:* \`$ISSUE_NUMBER\`\n🔗 [Открыть Issue]($ISSUE_URL)"
+            MESSAGE="🚨 *Error moving issue to IN_PROGRESS!*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
           fi
 
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
