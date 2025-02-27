@@ -91,9 +91,9 @@ jobs:
             exit 1
           fi
 
-          echo "Issue status updated to REVIEW" >> $GITHUB_ENV
-          echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
-          echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+            echo "ISSUE_STATUS=Issue status updated to REVIEW" >> $GITHUB_ENV
+            echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
+            echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
       - name: Send Telegram Notification
         if: success() || failure()
