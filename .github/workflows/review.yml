@@ -1,4 +1,4 @@
-name: Move Issue to REVIEW on PR Open
+name: Move Issue to REVIEW
 
 on:
   pull_request:

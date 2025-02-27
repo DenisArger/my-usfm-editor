@@ -1,4 +1,4 @@
-name: Move Issue to IN_PROGRESS on Branch Creation
+name: Move Issue to IN_PROGRESS
 
 on:
   create:
