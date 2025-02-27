@@ -1,4 +1,4 @@
-name: Update Issue Status to REVIEW on PR Open
+name: Move Issue to REVIEW on PR Open
 
 on:
   pull_request:
