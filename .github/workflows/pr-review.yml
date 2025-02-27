@@ -1,0 +1,115 @@
+name: Update Issue Status to REVIEW on PR Open
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up environment variables
+        run: |
+          echo "TOKEN_AUTOMATIZATION=${{ secrets.TOKEN_AUTOMATIZATION }}" >> $GITHUB_ENV
+          echo "ID_PROJECT_SKILLDOR=${{ secrets.ID_PROJECT_SKILLDOR }}" >> $GITHUB_ENV
+          echo "ID_COLUMN_STATUS_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_SKILLDOR }}" >> $GITHUB_ENV
+          echo "ID_COLUMN_STATUS_REVIEW_SKILLDOR=${{ secrets.ID_COLUMN_STATUS_REVIEW_SKILLDOR }}" >> $GITHUB_ENV
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
+
+      - name: Wait for mergeable state
+        run: sleep 10
+
+      - name: Check for conflicts
+        id: check_conflicts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+            core.info(`Mergeable status: ${pr.mergeable}`);
+            return { mergeable: pr.mergeable };
+
+      - name: Handle conflicts
+        if: steps.check_conflicts.outputs.mergeable == 'false'
+        run: |
+          MESSAGE="🚨 *PR #${{ github.event.pull_request.number }}* has conflicts. Please resolve conflicts before updating the status."
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
+          }
+          EOF
+          exit 1
+
+      - name: Update task status to REVIEW
+        run: |
+          set -euo pipefail
+
+          CURRENT_BRANCH="${{ github.event.pull_request.head.ref }}"
+          ISSUE_NUMBER=$(echo "$CURRENT_BRANCH" | cut -d'-' -f3)
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "Error: Could not extract issue number from branch name!"
+            exit 1
+          fi
+
+          GRAPHQL_QUERY='{"query": "query { node(id: \"'"$ID_PROJECT_SKILLDOR"'\") { ... on ProjectV2 { items(first: 100) { nodes { id content { ... on Issue { number title url } } } } } } }"}'
+          RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+            -H "Content-Type: application/json" \
+            -d "$GRAPHQL_QUERY") || { echo "Error: Failed to execute GraphQL query"; exit 1; }
+          if echo "$RESPONSE" | jq -e '.errors' >/dev/null; then
+            echo "Error: GitHub API returned errors: $(echo "$RESPONSE" | jq '.errors')"
+            exit 1
+          fi
+
+          ISSUE_ITEM_ID=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
+          ISSUE_URL=$(echo "$RESPONSE" | jq -r ".data.node.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .content.url")
+
+          if [ -z "$ISSUE_ITEM_ID" ] || [ "$ISSUE_ITEM_ID" == "null" ]; then
+            echo "Error: Issue with number $ISSUE_NUMBER not found in the project!"
+            exit 1
+          fi
+
+          GRAPHQL_MUTATION='{"query": "mutation { updateProjectV2ItemFieldValue(input: { projectId: \"'"$ID_PROJECT_SKILLDOR"'\", itemId: \"'"$ISSUE_ITEM_ID"'\", fieldId: \"'"$ID_COLUMN_STATUS_SKILLDOR"'\", value: { singleSelectOptionId: \"'"$ID_COLUMN_STATUS_REVIEW_SKILLDOR"'\" } }) { clientMutationId } }"}'
+          MUTATION_RESPONSE=$(curl -s -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
+            -H "Content-Type: application/json" \
+            -d "$GRAPHQL_MUTATION") || { echo "Error: Failed to execute GraphQL mutation"; exit 1; }
+          if echo "$MUTATION_RESPONSE" | jq -e '.errors' >/dev/null; then
+            echo "Error: Failed to update issue status: $(echo "$MUTATION_RESPONSE" | jq '.errors')"
+            exit 1
+          fi
+
+          echo "Issue status updated to REVIEW" >> $GITHUB_ENV
+          echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
+          echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+
+      - name: Send Telegram Notification
+        if: success() || failure()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            MESSAGE="✅ *Issue status updated to REVIEW.*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
+          else
+            MESSAGE="🚨 *Error updating Issue to REVIEW!*\n\n📌 *Issue Number:* \`$ISSUE_NUMBER\`\n🔗 [Open Issue]($ISSUE_URL)"
+          fi
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
+            "text": "$MESSAGE",
+            "parse_mode": "Markdown"
+          }
+          EOF
