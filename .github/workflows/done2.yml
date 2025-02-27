@@ -1,4 +1,4 @@
-name: Update DONE
+name: Update DONE2
 
 on:
   pull_request:
@@ -76,6 +76,12 @@ jobs:
             -H "Authorization: Bearer $TOKEN_AUTOMATIZATION" \
             -H "Content-Type: application/json" \
             -d "$GRAPHQL_QUERY_BLOCKED")
+          
+          NODES=$(echo "$RESPONSE_ALL" | jq -r ".data.node.items.nodes")
+          if [ "$NODES" = "null" ]; then
+            echo "No project items found, skipping further processing."
+            exit 0
+          fi  
 
           BLOCKED_ITEMS=$(echo "$RESPONSE_ALL" | jq -r '.data.node.items.nodes[] | select(.fieldValueByName.optionId == "'$ID_COLUMN_STATUS_BLOCKED_SKILLDOR'") | @base64')
           if [ -z "$BLOCKED_ITEMS" ]; then
