@@ -1,4 +1,4 @@
-name: Move Issue to IN_PROGRESS
+name: Move Issue to IN_PROGRESS + Message
 
 on:
   create:
@@ -97,6 +97,7 @@ jobs:
           {
             "chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}",
             "text": "$MESSAGE",
-            "parse_mode": "Markdown"
+            "parse_mode": "Markdown",
+            "message_thread_id": ${{ secrets.TELEGRAM_TOPIC_ID }}
           }
           EOF

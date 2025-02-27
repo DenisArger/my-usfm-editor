@@ -1,4 +1,4 @@
-name: Update DONE2
+name: Move Done + Message
 
 on:
   pull_request:
@@ -65,7 +65,8 @@ jobs:
           {
             "chat_id": "$TELEGRAM_CHAT_ID",
             "text": "$TELEGRAM_MESSAGE",
-            "parse_mode": "Markdown"
+            "parse_mode": "Markdown",
+            "message_thread_id": ${{ secrets.TELEGRAM_TOPIC_ID }}
           }
           EOF
 
@@ -92,7 +93,8 @@ jobs:
           {
             "chat_id": "$TELEGRAM_CHAT_ID",
             "text": "$TELEGRAM_MESSAGE",
-            "parse_mode": "Markdown"
+            "parse_mode": "Markdown",
+            "message_thread_id": ${{ secrets.TELEGRAM_TOPIC_ID }}
           }
           EOF
             exit 0
@@ -119,7 +121,8 @@ jobs:
           {   
             "chat_id": "$TELEGRAM_CHAT_ID",
             "text": "$TELEGRAM_MESSAGE",
-            "parse_mode": "Markdown"
+            "parse_mode": "Markdown",
+            "message_thread_id": ${{ secrets.TELEGRAM_TOPIC_ID }}
           }
             EOF
           done
